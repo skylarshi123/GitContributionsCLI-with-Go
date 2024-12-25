@@ -576,3 +576,54 @@ func printCells(cols map[int]column) {
                   ├──► printDayCol (left column)
                   └──► printCell (commit data)
  */
+
+ //With file extension stats
+ /*
+ stats(email)
+    │
+    ├──► processRepositories(email)
+    │       │
+    │       ├──► Gets repo list from ~/.gogitlocalstats
+    │       │
+    │       ├──► Initialize maps for:
+    │       │    - commits (days → count)
+    │       │    - allFileTypes (extension → count)
+    │       │
+    │       ├──► For each repository:
+    │       │    └──► fillCommits(email, path, commits)
+    │       │           │
+    │       │           ├──► Opens Git repo
+    │       │           ├──► Gets commit history
+    │       │           ├──► For each commit:
+    │       │           │    ├──► Count commits per day
+    │       │           │    └──► processFileTypes:
+    │       │           │         ├──► Get changed files
+    │       │           │         ├──► Extract extensions
+    │       │           │         └──► Update file type counts
+    │       │           │
+    │       │           └──► Returns: 
+    │       │                ├──► commits map
+    │       │                └──► fileTypes map
+    │       │
+    │       └──► Post-process file stats:
+    │           ├──► Convert to FileTypeStats slice
+    │           └──► Sort by frequency
+    │
+    ├──► printCommitsStats(commits)
+    │       │
+    │       ├──► sortMapIntoSlice (orders days)
+    │       ├──► buildCols (organizes into weeks)
+    │       └──► printCells
+    │             │
+    │             ├──► printMonths (top row)
+    │             ├──► printDayCol (left column)
+    │             └──► printCell (commit data)
+    │
+    └──► printFileTypeStats(fileTypeStats)
+            │
+            └──► Displays top 10 file types:
+                 Extension    Count
+                 .go         123
+                 .js          89
+                 etc...
+ */
