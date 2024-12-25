@@ -139,9 +139,6 @@ Future enhancements planned:
 - [ ] Custom date range selection
 - [ ] JSON/CSV export options
 
-## Author ✍️
-Skylar Shi
-
 ---
 ⭐ If you find this tool useful, please consider giving it a star!
 
