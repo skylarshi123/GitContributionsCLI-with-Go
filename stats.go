@@ -450,3 +450,30 @@ func printCells(cols map[int]column) {
 	// Note: Some days intentionally left blank for spacing
 	fmt.Printf(out)
  }
+
+ /*
+ stats(email)
+    │
+    ├──► processRepositories(email)
+    │       │
+    │       ├──► Gets repo list from ~/.gogitlocalstats
+    │       │
+    │       ├──► For each repository:
+    │       │    └──► fillCommits(email, path, commits)
+    │       │           │
+    │       │           ├──► Opens Git repo
+    │       │           ├──► Gets commit history
+    │       │           └──► Counts commits per day
+    │       │
+    │       └──► Returns map[days_ago]commit_count
+    │
+    └──► printCommitsStats(commits)
+            │
+            ├──► sortMapIntoSlice (orders days)
+            ├──► buildCols (organizes into weeks)
+            └──► printCells
+                  │
+                  ├──► printMonths (top row)
+                  ├──► printDayCol (left column)
+                  └──► printCell (commit data)
+ */
