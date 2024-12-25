@@ -9,7 +9,7 @@ import (
     "sort"
     // time provides time-related functions
     "time"
-    
+    "strings" // for string manipulation
     // go-git packages for Git operations
     // Note: this is an external package, not part of Go standard library
     "github.com/go-git/go-git/v5"
@@ -22,17 +22,50 @@ const outOfRange = 99999                  // Used as a marker for dates too old
 const daysInLastSixMonths = 183          // Approximately 6 months worth of days
 const weeksInLastSixMonths = 26          // Number of weeks in 6 months
 
+// New features, File Type Stats (most used file types in commits)
+type FileTypeStats struct {
+    Extension string
+    Count     int
+}
+
 // type is a Go keyword for declaring new types
 // column is a custom type that's really just a slice of integers
 type column []int
+
+func getFileExtension(filename string) string {
+    parts := strings.Split(filename, ".")
+    if len(parts) < 2 {
+        return "no_extension"
+    }
+    return "." + parts[len(parts)-1]
+}
+
+func processFileTypes(commit *object.Commit, fileTypes map[string]int) error {
+    // Get the commit's files
+    files, err := commit.Files()
+    if err != nil {
+        return err
+    }
+
+    // Iterate through changed files
+    files.ForEach(func(file *object.File) error {
+        ext := getFileExtension(file.Name)
+        fileTypes[ext]++
+        return nil
+    })
+
+    return nil
+}
+
 
 // stats is the main entry function for statistics generation
 // Takes an email string parameter to filter commits by author
 func stats(email string) {
     // Process all repositories and get commit data
-    commits := processRepositories(email)
+    commits, fileTypes := processRepositories(email)
     // Print the statistics in a formatted way
     printCommitsStats(commits)
+	printFileTypeStats(fileTypes)
 }
 
 // getBeginningOfDay converts a time.Time to the start of that day (00:00:00)
@@ -68,117 +101,166 @@ func countDaysSinceDate(date time.Time) int {
     return days
 }
 
-// fillCommits processes a Git repository and counts commits per day
+// fillCommits processes a Git repository and counts commits per day and file types
 // Parameters:
 //   - email: string to filter commits by author email
 //   - path: string path to the Git repository
 //   - commits: map[int]int to store days-ago -> commit-count mapping
-// Returns: the updated commits map
-func fillCommits(email string, path string, commits map[int]int) map[int]int {
-    // git.PlainOpen comes from go-git package
-    // Opens an existing repository at the given path
-    // Returns a *git.Repository and error if any
-    repo, err := git.PlainOpen(path)
-    if err != nil {
-        // panic is a built-in Go function that stops program execution
-        // Used here because we can't continue without repository access
-        panic(err)
-    }
-
-    // repo.Head() gets the HEAD reference of repository
-    // HEAD typically points to the latest commit of current branch
-    // Returns a *plumbing.Reference and error if any
-    ref, err := repo.Head()
-    if err != nil {
-        panic(err)
-    }
-
-    // repo.Log gets commit history starting from HEAD
-    // &git.LogOptions{From: ref.Hash()} specifies starting point
-    // ref.Hash() gets the commit hash from the reference
-    // Returns a object.CommitIterator for walking through commits
-    iterator, err := repo.Log(&git.LogOptions{From: ref.Hash()})
-    if err != nil {
-        panic(err)
-    }
-
-    // Calculate offset for proper calendar alignment
-    // This adjusts commit dates to match GitHub's contribution graph
-    offset := calcOffset()
-
-    // iterator.ForEach comes from go-git
-    // Walks through each commit in history
-    // Takes a function to process each commit
-    err = iterator.ForEach(func(c *object.Commit) error {
-        // Get number of days between commit date and today
-        // c.Author.When is the commit timestamp
-        daysAgo := countDaysSinceDate(c.Author.When) + offset
-
-        // Skip if commit author email doesn't match filter
-        // c.Author.Email comes from the commit metadata
-        if c.Author.Email != email {
-            // Return nil to continue to next commit
-            return nil
-        }
-
-        // If commit is within our time range (not outOfRange)
-        if daysAgo != outOfRange {
-            // Increment commit count for that day
-            // commits[daysAgo]++ is equivalent to:
-            // commits[daysAgo] = commits[daysAgo] + 1
-            commits[daysAgo]++
-        }
-
-        // Return nil to continue processing commits
-        return nil
-    })
-    
-    // Check for errors during commit processing
-    if err != nil {
-        panic(err)
-    }
-
-    // Return the updated commits map
-    return commits
-}
-
-// processRepositories scans all repositories and counts commits
-// Parameter:
-//   - email: string to filter commits by author
-// Returns: map[int]int where key is days-ago and value is commit count
-func processRepositories(email string) map[int]int {
-    // Get path to our repository list file
-    // getDotFilePath() is defined in scan.go
-    filePath := getDotFilePath()
-    
-    // Read repository paths from file
-    // parseFileLinesToSlice() is defined in scan.go
-    repos := parseFileLinesToSlice(filePath)
-
-    // Store number of days we're tracking
-    daysInMap := daysInLastSixMonths
-
-    // make is a built-in Go function to create maps
-    // map[int]int creates a map with int keys and int values
-    // daysInMap sets initial capacity for efficiency
-    commits := make(map[int]int, daysInMap)
-
-    // Initialize all days with zero commits
-    // Using reverse loop: daysInMap down to 1
-    for i := daysInMap; i > 0; i-- {
-        commits[i] = 0
-    }
-
-    // Process each repository in our list
-    // range is a Go keyword for iterating over slices/maps
-    for _, path := range repos {
-        // Update commits map with commits from this repository
-        commits = fillCommits(email, path, commits)
-    }
-
-    // Return the completed commit history map
-    return commits
-}
+// Returns: 
+//   - map[int]int: the updated commits map
+//   - map[string]int: counts of file types modified
+func fillCommits(email string, path string, commits map[int]int) (map[int]int, map[string]int) {
+	// Create a new map to store file extension counts
+	// map[string]int where key is file extension (e.g., ".go") and value is count
+	fileTypes := make(map[string]int)
+ 
+	// git.PlainOpen comes from go-git package
+	// Opens an existing repository at the given path
+	// Returns a *git.Repository and error if any
+	repo, err := git.PlainOpen(path)
+	if err != nil {
+		// panic is a built-in Go function that stops program execution
+		// Used here because we can't continue without repository access
+		panic(err)
+	}
+ 
+	// repo.Head() gets the HEAD reference of repository
+	// HEAD typically points to the latest commit of current branch
+	// Returns a *plumbing.Reference and error if any
+	ref, err := repo.Head()
+	if err != nil {
+		panic(err)
+	}
+ 
+	// repo.Log gets commit history starting from HEAD
+	// &git.LogOptions{From: ref.Hash()} specifies starting point
+	// ref.Hash() gets the commit hash from the reference
+	// Returns a object.CommitIterator for walking through commits
+	iterator, err := repo.Log(&git.LogOptions{From: ref.Hash()})
+	if err != nil {
+		panic(err)
+	}
+ 
+	// Calculate offset for proper calendar alignment
+	// This adjusts commit dates to match GitHub's contribution graph
+	offset := calcOffset()
+ 
+	// iterator.ForEach comes from go-git
+	// Walks through each commit in history
+	// Takes a function to process each commit
+	err = iterator.ForEach(func(c *object.Commit) error {
+		// Get number of days between commit date and today
+		// c.Author.When is the commit timestamp
+		daysAgo := countDaysSinceDate(c.Author.When) + offset
+ 
+		// Skip if commit author email doesn't match filter
+		// c.Author.Email comes from the commit metadata
+		if c.Author.Email != email {
+			// Return nil to continue to next commit
+			return nil
+		}
+ 
+		// If commit is within our time range (not outOfRange)
+		if daysAgo != outOfRange {
+			// Increment commit count for that day
+			commits[daysAgo]++
+			
+			// Process file types for this commit
+			// processFileTypes is our helper function that counts file extensions
+			// Pass the current commit and our fileTypes map to update
+			if err := processFileTypes(c, fileTypes); err != nil {
+				// If there's an error processing files, return it
+				// This will stop the commit iteration
+				return err
+			}
+		}
+ 
+		// Return nil to continue processing commits
+		return nil
+	})
+ 
+	// Check for errors during commit processing
+	if err != nil {
+		panic(err)
+	}
+ 
+	// Return both the commits map and fileTypes map
+	// This allows the caller to aggregate statistics across repositories
+	return commits, fileTypes
+ }
+ 
+ // processRepositories scans all repositories and processes commit data
+ // Parameter:
+ //   - email: string to filter commits by author
+ // Returns: 
+ //   - map[int]int: days-ago to commit count mapping
+ //   - []FileTypeStats: sorted slice of file extension statistics
+ func processRepositories(email string) (map[int]int, []FileTypeStats) {
+	// Get path to our repository list file
+	// getDotFilePath() is defined in scan.go
+	filePath := getDotFilePath()
+	
+	// Read repository paths from file
+	// parseFileLinesToSlice() is defined in scan.go
+	repos := parseFileLinesToSlice(filePath)
+ 
+	// Store number of days we're tracking
+	daysInMap := daysInLastSixMonths
+ 
+	// Create map for commit counts
+	// make is a built-in Go function to create maps
+	commits := make(map[int]int, daysInMap)
+	
+	// Create map for aggregating file type counts across all repositories
+	// Key is file extension, value is total count
+	allFileTypes := make(map[string]int)
+ 
+	// Initialize all days with zero commits
+	// Using reverse loop: daysInMap down to 1
+	for i := daysInMap; i > 0; i-- {
+		commits[i] = 0
+	}
+ 
+	// Process each repository in our list
+	// range is a Go keyword for iterating over slices
+	for _, path := range repos {
+		// Process this repository and get its statistics
+		// newCommits: updated commit counts
+		// newFileTypes: file type counts from this repo
+		newCommits, newFileTypes := fillCommits(email, path, commits)
+		
+		// Update our commits map with results from this repo
+		commits = newCommits
+		
+		// Merge file type counts from this repo into our total counts
+		// range over map of new file types
+		for ext, count := range newFileTypes {
+			// Add counts to our running totals
+			allFileTypes[ext] += count
+		}
+	}
+ 
+	// Create slice to hold sorted file type statistics
+	var fileTypeStats []FileTypeStats
+	
+	// Convert our map of counts into a slice of FileTypeStats
+	// This makes it easier to sort
+	for ext, count := range allFileTypes {
+		// Append creates a new FileTypeStats struct for each extension
+		fileTypeStats = append(fileTypeStats, FileTypeStats{ext, count})
+	}
+	
+	// sort.Slice comes from sort package
+	// Sorts our slice of FileTypeStats based on Count field
+	// The function provided returns true if element i should come before element j
+	sort.Slice(fileTypeStats, func(i, j int) bool {
+		// Sort in descending order (higher counts first)
+		return fileTypeStats[i].Count > fileTypeStats[j].Count
+	})
+ 
+	// Return both the commit counts and sorted file type statistics
+	return commits, fileTypeStats
+ }
 
 // calcOffset determines how many days to offset for calendar alignment
 // Returns: int representing number of days to offset
@@ -450,6 +532,23 @@ func printCells(cols map[int]column) {
 	// Note: Some days intentionally left blank for spacing
 	fmt.Printf(out)
  }
+
+ func printFileTypeStats(stats []FileTypeStats) {
+    fmt.Printf("\nFile Type Statistics:\n")
+    fmt.Printf("===================\n")
+    
+    // Print top 10 or all if less than 10
+    limit := 10
+    if len(stats) < limit {
+        limit = len(stats)
+    }
+    
+    for i := 0; i < limit; i++ {
+        stat := stats[i]
+        fmt.Printf("%-15s %5d files\n", stat.Extension, stat.Count)
+    }
+    fmt.Println()
+}
 
  /*
  stats(email)
