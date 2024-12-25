@@ -255,3 +255,23 @@ func scanGitFolders(folders []string, folder string) []string {
 
     return folders
 }
+
+/*
+scan(folder)
+    │
+    ├──► recursiveScanFolder(folder)
+    │       │
+    │       └──► scanGitFolders(empty_slice, folder)
+    │               │
+    │               ├──► Recursively searches directories
+    │               └──► Returns list of found Git repos
+    │
+    ├──► getDotFilePath()
+    │       └──► Gets/creates ~/.gogitlocalstats
+    │
+    └──► addNewSliceElementsToFile()
+            │
+            ├──► parseFileLinesToSlice (reads existing repos)
+            ├──► joinSlices (combines new & existing repos)
+            └──► dumpStringsSliceToFile (writes back to file)
+*/
