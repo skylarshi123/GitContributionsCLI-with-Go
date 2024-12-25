@@ -1,0 +1,25 @@
+# Git files
+.git
+.gitignore
+
+# Go build files
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Output files
+/.gogitlocalstats
+
+# Go testing
+*.test
+
+# Debug files
+*.out
+
+# IDE specific files
+.idea/
+.vscode/
+*.swp
+*.swo
