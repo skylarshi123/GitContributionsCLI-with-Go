@@ -43,15 +43,15 @@ A powerful command-line tool that brings GitHub-style contribution visualization
 ## Installation 📦
 
 ### Prerequisites
-- Go 1.21 or higher
+- Go 1.23 or higher
 - Git
 - (Optional) Docker
 
 ### Standard Installation
 ```bash
 # Clone the repository
-git clone https://github.com/skylarshi123/GitContributionsCLI
-cd GitContributionsCLI
+git clone https://github.com/skylarshi123/GitContributionsCLI-with-Go
+cd GitContributionsCLI-with-Go
 
 # Install dependencies
 go mod download
